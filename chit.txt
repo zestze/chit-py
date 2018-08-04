@@ -1,0 +1,89 @@
+CREATE TABLE Users
+(
+  //userID text, for now, don't use userID, too lazy, and makes things too
+                  complicated
+  userName text,
+  password text,
+  PRIMARY KEY (userName)
+  )
+
+CREATE TABLE UserMetadata
+(
+ userName text,
+ loginTime timestamptz, // store everything on server in UTC and do
+                            conversion in client
+ loginIp inet,
+ loginPort int,
+ loginLat float,
+ loginLong float,
+ PRIMARY KEY (userName, loginTime),
+ FOREIGN KEY (userName) REFERENCES Users
+  ON DELETE CASCADE
+ )
+
+CREATE TABLE Servers
+(
+ serverName text,
+ frontIP inet,
+ frontName text
+ PRIMARY KEY(serverName)
+)
+
+// optional
+CREATE TABLE Connections
+(
+  userName text,
+  serverName text,
+  connStatus boolean,
+  displayName text,
+  FOREIGN KEY (userName) REFERENCES Users,
+  FOREIGN KEY (serverName) REFERENCES Servers,
+  PRIMARY KEY (userName, serverName)
+)
+
+// optional
+CREATE TABLE Friends
+(
+  userName1 text,
+  userName2 text,
+  established timestamp,
+  FOREIGN KEY (userName1) REFERENCES Users,
+  FOREIGN KEY (userName2) REFERENCES Users,
+  PRIMARY KEY (userName1, userName2)
+)
+
+// optional
+CREATE TABLE ServerMetadata
+(
+  startupTime timestamp,
+  serverIP inet,
+  serverPort int,
+  serverLat float,
+  serverLong float,
+  serverName text,
+  FOREIGN KEY (serverName) REFERENCES Servers
+    ON DELETE CASCADE,
+  PRIMARY KEY (serverName, startupTime)
+)
+
+CREATE TABLE Channels
+(
+  channelName text,
+  channelTopic text,
+  serverName text,
+  FOREIGN KEY (serverName) REFERENCES Servers
+    ON DELETE CASCADE,
+  PRIMARY KEY (serverName, channelName)
+)
+
+CREATE TABLE ChatLogs
+(
+  userName text,
+  originTime timestamp,
+  content text,
+  channelName text,
+  FOREIGN KEY (userName) REFERENCES Users,
+  FOREIGN KEY (channelName) REFERENCES Channels
+    ON DELETE CASCADE,
+  PRIMARY KEY (userName, channelName, originTime)
+)
