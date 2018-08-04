@@ -8,9 +8,34 @@ import enum
 
 import user
 
-DATABASEURI = "postgresql://eer2138:columbiacrusheshalloffame@35.227.79.146/proj1part2"
-engine = sql.create_engine(DATABASEURI)
+#DATABASEURI = "postgresql://eer2138:columbiacrusheshalloffame@35.227.79.146/proj1part2"
+#DATABASEURI = getDatabaseUri()
+#print (DATABASEURI)
+#engine = sql.create_engine(DATABASEURI)
 
+def getDatabaseUri(configFile="config.hide"):
+    details = []
+    with open(configFile) as f:
+        f.readline() # first line tells format
+        line = f.readline()
+        details = line.split(',')
+    # ignore port for now
+    uri = "{}://{}:{}@{}:{}/{}".format(details[0], details[1],
+                                    details[2], details[3],
+                                    details[4], details[5])
+    return uri
+
+DATABASEURI = getDatabaseUri()
+print (DATABASEURI)
+engine = sql.create_engine(DATABASEURI)
+print ("worked?")
+
+conn = engine.connect()
+
+query_str = 'SELECT * FROM users;'
+cursor = conn.execute(query_str)
+for row in cursor:
+    print (row)
 
 class Status(enum.Enum):
     """
