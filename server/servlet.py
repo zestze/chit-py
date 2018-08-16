@@ -121,7 +121,8 @@ class Servlet(threading.Thread):
                     sio.try_write(usr.socket, reply)
 
             # log msg into database because we're facebook
-            cm.insert_msg(self.channelID, self.users[from_user], msg, self.serverName)
+            #cm.insert_msg(self.channelID, self.users[from_user], msg, self.serverName)
+            cm.insert_msg(self.channel_name, self.users[from_user], msg, self.serverName)
 
         elif msg[:4] == "PART":
             # :<nick>!<user>@<user-ip> PART <channel>

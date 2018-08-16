@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+"""
+@TODO: need more secure way of doing database manipulation.
+        move all database stuff to server-side, and let it do it there based on configs?
+        since rn anyone can get the data i give em and wreak havoc.
+"""
 import sqlalchemy as sql
 import socket
 import datetime
@@ -8,12 +13,7 @@ import enum
 
 import user
 
-#DATABASEURI = "postgresql://eer2138:columbiacrusheshalloffame@35.227.79.146/proj1part2"
-#DATABASEURI = getDatabaseUri()
-#print (DATABASEURI)
-#engine = sql.create_engine(DATABASEURI)
-
-def getDatabaseUri(configFile="config.hide"):
+def getDatabaseUri(configFile="../libs/config.hide"):
     details = []
     with open(configFile) as f:
         f.readline() # first line tells format
@@ -25,17 +25,11 @@ def getDatabaseUri(configFile="config.hide"):
                                     details[4], details[5])
     return uri
 
+
+#### GLOBALS ####
 DATABASEURI = getDatabaseUri()
-print (DATABASEURI)
 engine = sql.create_engine(DATABASEURI)
-print ("worked?")
-
-conn = engine.connect()
-
-query_str = 'SELECT * FROM users;'
-cursor = conn.execute(query_str)
-for row in cursor:
-    print (row)
+#### GLOBALS ####
 
 class Status(enum.Enum):
     """
@@ -71,7 +65,7 @@ def insert_user(client):
     """
     conn = engine.connect()
 
-    query_str = 'SELECT * FROM "User";'
+    query_str = 'SELECT * FROM Users;'
     cursor = conn.execute(query_str)
     for row in cursor:
         if client.real_name == row[0]:
@@ -82,10 +76,15 @@ def insert_user(client):
             else:
                 return True, "_throw_away_text_"
 
-    cursor = conn.execute("""INSERT INTO "User" (userid, loginname, password)
+    cursor = conn.execute("""INSERT INTO Users (realname, username, password)
                           VALUES (%s, %s, %s);""", (client.real_name,
                                                     client.nick,
                                                     client.password))
+    #cursor = conn.execute("""INSERT INTO Users (username, password)
+    #                      VALUES (%s, %s);""", (client.real_name,
+    #                                            client.nick,
+    #                                            client.password))
+
     cursor.close()
     return True, "_throw_away_text_"
 
@@ -100,8 +99,8 @@ def update_bio(client, bio):
     """
     conn = engine.connect()
 
-    cursor = conn.execute("""UPDATE "User" SET bio = %s
-                          WHERE userid = %s;""", (bio, client.real_name))
+    cursor = conn.execute("""UPDATE Users SET bio = %s
+                          WHERE username = %s;""", (bio, client.nick))
     cursor.close()
 
 def insert_login(sock, user):
@@ -110,7 +109,8 @@ def insert_login(sock, user):
         @sock: socket connected to IRC server
         @user: client's user object
     """
-    now = datetime.datetime.now(pytz.utc)
+    #now = datetime.datetime.now(pytz.utc)
+    now = datetime.datetime.utcnow()
     ip, port = sock.getsockname()
     # this gives an internal ip... so need to make a phony connection
     # to get actual ip
@@ -119,12 +119,12 @@ def insert_login(sock, user):
 
     conn = engine.connect()
 
-    cursor = conn.execute("""INSERT INTO "LoginInstance" (ip, port, datetime, latitude,
-                          longitude, userid)
+    cursor = conn.execute("""INSERT INTO UserMetadata (loginIp, loginPort, loginTime, loginLat,
+                          loginLong, username)
                           VALUES (%s, %s, %s, %s, %s, %s);""", (ip, port,
                                                                now,
                                                                lat, lon,
-                                                               user.real_name))
+                                                               user.nick))
     cursor.close()
 
 def insert_server(sock, serverID):
@@ -139,6 +139,7 @@ def insert_server(sock, serverID):
     # @TODO: idea: instead of randomly generating worthless serverID,
     # require cLI args for a server name
 
+    now = datetime.datetime.utcnow()
     ip, port = sock.getsockname()
     # this gives an internal ip... so need to make a phony connection
     # to get actual ip
@@ -147,11 +148,20 @@ def insert_server(sock, serverID):
 
     conn = engine.connect()
 
-    cursor = conn.execute("""INSERT INTO "Server" (servername, ip, port,
-                          latitude, longitude)
-                          VALUES (%s, %s, %s, %s, %s);""", (serverID,
-                                                            ip, port,
-                                                            lat, lon))
+    #cursor = conn.execute("""INSERT INTO Servers (servername, ip, port,
+    #                      latitude, longitude)
+    #                      VALUES (%s, %s, %s, %s, %s);""", (serverID,
+    #                                                        ip, port,
+    #                                                        lat, lon))
+    cursor = conn.execute("""INSERT INTO Servers (servername)
+                          VALUES (%s);""", (serverID))
+    cursor = conn.execute("""INSERT INTO ServerMetadata (startuptime,
+                          serverIP, serverPort, serverLat, serverLong,
+                          serverName)
+                          VALUES (%s, %s, %s, %s, %s, %s);""", (now,
+                                                                ip, port,
+                                                                lat, lon,
+                                                                serverID))
     cursor.close()
 
 def insert_channel(channelID, channel_name, channel_topic, serverName):
@@ -164,18 +174,23 @@ def insert_channel(channelID, channel_name, channel_topic, serverName):
     conn = engine.connect()
 
     # @TODO: need to limit serverName and channel_name to make sure it's not too long
-    cursor = conn.execute("""INSERT INTO "Channel" (channelID, channelname,
-                          channeltopic, servername)
-                          VALUES (%s, %s, %s, %s);""", (channelID,
-                                                        channel_name,
-                                                        channel_topic,
-                                                        serverName))
+    #cursor = conn.execute("""INSERT INTO "Channel" (channelID, channelname,
+    #                      channeltopic, servername)
+    #                      VALUES (%s, %s, %s, %s);""", (channelID,
+    #                                                    channel_name,
+    #                                                    channel_topic,
+    #                                                    serverName))
+    cursor = conn.execute("""INSERT INTO Channels (channelName, channelTopic,
+                          serverName)
+                          VALUES (%s, %s, %s);""", (channel_name,
+                                                    channel_topic,
+                                                    serverName))
     cursor.close()
 
-def insert_msg(channelID, client, msg, serverName):
+def insert_msg(channel_name, client, msg, serverName):
     """
     @params:
-        @channelid: a unique ID identifying this specific channel
+        @channel_name: the name of this channel on server serverName
         @client: of type user, the one sending the msg
         @msg: the message being broadcasted across the server
         @serverName: the unique serverName identifying the server
@@ -183,6 +198,7 @@ def insert_msg(channelID, client, msg, serverName):
     conn = engine.connect()
 
     now = datetime.datetime.now(pytz.utc)
+    now = datetime.datetime.utcnow()
 
     # get rid of extra info preceding msg
     # PRIVMSG <#channel> :<msg>
@@ -193,13 +209,37 @@ def insert_msg(channelID, client, msg, serverName):
     #if len(msg) > 100:
         #msg = msg[:100 - 3] + "..."
 
-    cursor = conn.execute("""INSERT INTO "Msg" (channelid, userid, datetime, msg, servername)
-                          VALUES (%s, %s, %s, %s, %s);""", (channelID,
-                                                           client.real_name,
-                                                           now,
-                                                           msg,
-                                                           serverName))
+    #cursor = conn.execute("""INSERT INTO "Msg" (channelid, userid, datetime, msg, servername)
+    #                      VALUES (%s, %s, %s, %s, %s);""", (channelID,
+    #                                                       client.real_name,
+    #                                                       now,
+    #                                                       msg,
+    #                                                       serverName))
+    cursor = conn.execute("""INSERT INTO ChatLogs (username, originTime,
+                          content, channelName, serverName)
+                          VALUES (%s, %s, %s, %s, %s);""", (client.nick,
+                                                            now,
+                                                            msg,
+                                                            channel_name,
+                                                            serverName))
     cursor.close()
+
+def insert_connection(channelID, client, status_enum, serverName):
+    """
+    @TODO: copy params and stuff from below function.
+        come up with cleaner way of calling this function.
+        maybe separate nick from being both username and displayname.
+    """
+    conn = engine.connect()
+
+    cursor = conn.execute("""INSERT INTO connections (userName,
+                          serverName, connStatus, displayName)
+                          VALUES (%s, %s, %s, %s);""", (client.nick,
+                                                        serverName,
+                                                        str(status_enum),
+                                                        client.nick))
+    cursor.close()
+
 
 def insert_per_ch_user_stat(channelID, client, status_enum, serverName):
     """
@@ -209,6 +249,12 @@ def insert_per_ch_user_stat(channelID, client, status_enum, serverName):
         @status_enum: ('Admin', 'User', 'Banned')
         @servername: the unique string identifying the server
     """
+
+    # @TODO: NEEDS TO BE CLEANED UP - CIRCUMNAVIGATING FOR NOW
+    insert_connection(channelID, client, status_enum, serverName)
+    return
+
+
     conn = engine.connect()
 
     # @TODO: set so that a SELECT is done to check if user is already there.
