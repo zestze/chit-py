@@ -53,7 +53,7 @@ class Servlet(threading.Thread):
         rand = random.randint(1, 10000)
         channelID = "channel" + str(rand)
         self.channelID = channelID
-        cm.insert_channel(channelID, self.channel_name,
+        cm.insert_channel(self.channel_name,
                           self.topic, self.serverName)
 
     def run(self):
@@ -111,7 +111,7 @@ class Servlet(threading.Thread):
             # PRIVMSG <channel> :<msg>
             theirIP, _ = self.users[from_user].socket.getpeername()
             reply = ":{}!{}@{} {}\r\n".format(from_user,
-                                              self.users[from_user].user_name,
+                                              self.users[from_user].whoami,
                                               theirIP,
                                               msg)
             for usr_nick, usr in self.users.items():
@@ -129,7 +129,7 @@ class Servlet(threading.Thread):
             # PART <channel>
             theirIP, _ = self.users[from_user].socket.getpeername()
             reply = ":{}!{}@{} {}\r\n".format(from_user,
-                                              self.users[from_user].user_name,
+                                              self.users[from_user].whoami,
                                               theirIP,
                                               msg)
             for usr_nick, usr in self.users.items():
@@ -161,7 +161,7 @@ class Servlet(threading.Thread):
             self.mul_sock_msgs[newu.socket] = their_sockmsgs
             theirIP, _ = newu.socket.getpeername()
             msg = "{}!{}@{} ".format(newu.nick,
-                                     newu.user_name,
+                                     newu.whoami,
                                      theirIP)
             msg += "JOIN {}\r\n".format(self.channel_name)
 
@@ -185,10 +185,12 @@ class Servlet(threading.Thread):
 
             # if this is the first user to register, make them admin
             if len(self.users.items()) == 1:
-                cm.insert_per_ch_user_stat(self.channelID, newu, cm.Status.Admin,
-                                           self.serverName)
+                cm.insert_channelRoles(newu.nick, self.channel_name, self.serverName,
+                                       cm.Status.Admin)
             else:
-                cm.insert_per_ch_user_stat(self.channelID, newu, cm.Status.User,
-                                           self.serverName)
-
+                #@TODO: do something with the status
+                status = get_channelRoles(newu.nick, self.channel_name, self.serverName)
+                if not status:
+                    cm.insert_channelRoles(newu.userID, self.channel_name, self.serverName,
+                                           cm.Status.User)
 

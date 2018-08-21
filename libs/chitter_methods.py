@@ -13,17 +13,15 @@ import enum
 
 import user
 
-def getDatabaseUri(configFile="../libs/config.hide"):
-    details = []
+def getDatabaseUri(configFile="../libs/config"):
     with open(configFile) as f:
         f.readline() # first line tells format
         line = f.readline()
         details = line.split(',')
-    # ignore port for now
-    uri = "{}://{}:{}@{}:{}/{}".format(details[0], details[1],
-                                    details[2], details[3],
-                                    details[4], details[5])
-    return uri
+        uri = "{}://{}:{}@{}:{}/{}".format(details[0], details[1],
+                                        details[2], details[3],
+                                        details[4], details[5])
+        return uri
 
 
 #### GLOBALS ####
@@ -52,111 +50,126 @@ def get_local_ip():
     sock.close()
     return ip
 
+def check_user_exists(userID):
+    """
+    @params:
+        @userID: str
+
+    @returns:
+        @True if user exists
+        @False else
+    """
+    conn = engine.connect()
+    query_str = 'SELECT userid FROM Users;'
+    cursor = conn.execute(query_str)
+    for row in cursor:
+        if row['userid'] == userID:
+            cursor.close()
+            return True
+    cursor.close()
+    return False
+
+def verify_password(userID, password):
+    """
+    """
+    conn = engine.connect()
+    cursor = conn.execute("""SELECT password FROM Users WHERE
+                          userID = %s;""", (userID))
+    actual = cursor.fetchone()['password']
+    cursor.close()
+    return actual == password
+
+def update_password(userID, newPass):
+    """
+    """
+    conn = engine.connect()
+    cursor = conn.execute("""UPDATE Users SET password = %s
+                          WHERE userID = %s;""", (newPass, userID))
+    cursor.close()
+
 def insert_user(client):
     """
     @params:
         @client is of type user
-
-    @returns:
-        if user is brand new: True
-        if user is old, password incorrect: False, <correct-password>
-        if user is old, password correct: True
-
     """
     conn = engine.connect()
-
-    query_str = 'SELECT * FROM Users;'
-    cursor = conn.execute(query_str)
-    for row in cursor:
-        if client.real_name == row[0]:
-            password = row[3]
-            cursor.close()
-            if password != client.password:
-                return False, password
-            else:
-                return True, "_throw_away_text_"
-
-    cursor = conn.execute("""INSERT INTO Users (realname, username, password)
-                          VALUES (%s, %s, %s);""", (client.real_name,
-                                                    client.nick,
-                                                    client.password))
-    #cursor = conn.execute("""INSERT INTO Users (username, password)
-    #                      VALUES (%s, %s);""", (client.real_name,
-    #                                            client.nick,
-    #                                            client.password))
-
+    cursor = conn.execute("""INSERT INTO Users (userID, password,
+                          realName, whoami)
+                          VALUES (%s, %s, %s, %s);""",
+                          (client.nick, client.password,
+                           client.real_name, client.whoami))
     cursor.close()
-    return True, "_throw_away_text_"
 
-def update_bio(client, bio):
-    """
-    @params:
-        @client is of type user
-        @bio is a string
-
-    @returns:
-        nothing
-    """
+def get_bio(userID):
     conn = engine.connect()
+    cursor = conn.execute("""SELECT bio FROM Users WHERE
+                          userID = %s;""", (userID))
+    bio = cursor.fetchone()['bio']
+    cursor.close()
+    return bio
 
+def update_bio(userID, bio):
+    conn = engine.connect()
     cursor = conn.execute("""UPDATE Users SET bio = %s
-                          WHERE username = %s;""", (bio, client.nick))
+                          WHERE userID = %s;""", (bio, userID))
     cursor.close()
 
-def insert_login(sock, user):
+def insert_login(sock, userID):
     """
     @params:
         @sock: socket connected to IRC server
         @user: client's user object
     """
-    #now = datetime.datetime.now(pytz.utc)
     now = datetime.datetime.utcnow()
     ip, port = sock.getsockname()
     # this gives an internal ip... so need to make a phony connection
     # to get actual ip
     ip = get_local_ip()
     lat, lon = geocoder.ip("me").latlng
-
     conn = engine.connect()
-
     cursor = conn.execute("""INSERT INTO UserMetadata (loginIp, loginPort, loginTime, loginLat,
-                          loginLong, username)
+                          loginLong, userID)
                           VALUES (%s, %s, %s, %s, %s, %s);""", (ip, port,
                                                                now,
                                                                lat, lon,
-                                                               user.nick))
+                                                               userID))
     cursor.close()
 
-def insert_server(sock, serverID):
+def check_server_exists(serverID):
+    conn = engine.connect()
+    cursor = conn.execute("""SELECT serverName from Servers;""")
+    for row in cursor:
+        if row[0] == serverID:
+            cursor.close()
+            return True
+    cursor.close()
+    return False
+
+
+def insert_server(serverID):
     """
     @params:
         @sock: socket server using to listen
         @serverID: server name, randomly generated
     """
-    # @TODO: need to check if serverID exists, just in case
-    # to be robust
-
     # @TODO: idea: instead of randomly generating worthless serverID,
     # require cLI args for a server name
+    conn = engine.connect()
 
+    cursor = conn.execute("""INSERT INTO Servers (servername)
+                          VALUES (%s);""", (serverID))
+    cursor.close()
+
+def insert_server_metadata(sock, serverID):
     now = datetime.datetime.utcnow()
     ip, port = sock.getsockname()
     # this gives an internal ip... so need to make a phony connection
     # to get actual ip
     ip = get_local_ip()
     lat, lon = geocoder.ip("me").latlng
-
     conn = engine.connect()
-
-    #cursor = conn.execute("""INSERT INTO Servers (servername, ip, port,
-    #                      latitude, longitude)
-    #                      VALUES (%s, %s, %s, %s, %s);""", (serverID,
-    #                                                        ip, port,
-    #                                                        lat, lon))
-    cursor = conn.execute("""INSERT INTO Servers (servername)
-                          VALUES (%s);""", (serverID))
     cursor = conn.execute("""INSERT INTO ServerMetadata (startuptime,
-                          serverIP, serverPort, serverLat, serverLong,
+                          privateIP, privatePort, privateLat, privateLong,
                           serverName)
                           VALUES (%s, %s, %s, %s, %s, %s);""", (now,
                                                                 ip, port,
@@ -164,22 +177,21 @@ def insert_server(sock, serverID):
                                                                 serverID))
     cursor.close()
 
-def insert_channel(channelID, channel_name, channel_topic, serverName):
+def check_channel_exists(channel_name):
+    conn = engine.connect()
+    cursor = conn.execute("""SELECT channelName from Channels;""")
+    for row in cursor:
+        if row['channelName'] == channel_name:
+            cursor.close()
+            return True
+    cursor.close()
+    return False
+
+def insert_channel(channel_name, channel_topic, serverName):
     """
-    @params:
-        @channelID: channel<randint>
     """
-    # @TODO: need to check if serverID exists, just in case
-    # to be robust
     conn = engine.connect()
 
-    # @TODO: need to limit serverName and channel_name to make sure it's not too long
-    #cursor = conn.execute("""INSERT INTO "Channel" (channelID, channelname,
-    #                      channeltopic, servername)
-    #                      VALUES (%s, %s, %s, %s);""", (channelID,
-    #                                                    channel_name,
-    #                                                    channel_topic,
-    #                                                    serverName))
     cursor = conn.execute("""INSERT INTO Channels (channelName, channelTopic,
                           serverName)
                           VALUES (%s, %s, %s);""", (channel_name,
@@ -197,25 +209,13 @@ def insert_msg(channel_name, client, msg, serverName):
     """
     conn = engine.connect()
 
-    now = datetime.datetime.now(pytz.utc)
     now = datetime.datetime.utcnow()
 
     # get rid of extra info preceding msg
     # PRIVMSG <#channel> :<msg>
     msg = msg[msg.find(":") + 1:]
 
-    # make sure msg is under 100 characters, and if over, put suffix to signify so
-    # this is no longer necessary, singe database column got changed to TEXT
-    #if len(msg) > 100:
-        #msg = msg[:100 - 3] + "..."
-
-    #cursor = conn.execute("""INSERT INTO "Msg" (channelid, userid, datetime, msg, servername)
-    #                      VALUES (%s, %s, %s, %s, %s);""", (channelID,
-    #                                                       client.real_name,
-    #                                                       now,
-    #                                                       msg,
-    #                                                       serverName))
-    cursor = conn.execute("""INSERT INTO ChatLogs (username, originTime,
+    cursor = conn.execute("""INSERT INTO ChatLogs (userID, originTime,
                           content, channelName, serverName)
                           VALUES (%s, %s, %s, %s, %s);""", (client.nick,
                                                             now,
@@ -240,45 +240,69 @@ def insert_connection(channelID, client, status_enum, serverName):
                                                         client.nick))
     cursor.close()
 
-
-def insert_per_ch_user_stat(channelID, client, status_enum, serverName):
+def get_serverRoles(userID, serverName):
     """
-    @params:
-        @channelid: unique ID identifying channel
-        @client: of type user, the user currently registering
-        @status_enum: ('Admin', 'User', 'Banned')
-        @servername: the unique string identifying the server
+    @returns: None, None if serverRoles does not exist
     """
-
-    # @TODO: NEEDS TO BE CLEANED UP - CIRCUMNAVIGATING FOR NOW
-    insert_connection(channelID, client, status_enum, serverName)
-    return
-
-
     conn = engine.connect()
+    cursor = conn.execute("""SELECT (permissions, displayName) FROM ServerRoles
+                          WHERE userID = %s AND serverName = %s;""",
+                          (userID, serverName))
+    result = cursor.fetchone()
+    if not result:
+        cursor.close()
+        return None, None
+    status, displayName = result[0].split(',')
+    status, displayName = status[1:], displayName[:len(displayName) - 1]
+    cursor.close()
+    return Status[status], displayName
 
-    # @TODO: set so that a SELECT is done to check if user is already there.
-    # in case they login again. Else this will all crash since the primary key
+def insert_serverRoles(userID, serverName, status_enum, displayName=None):
+    if not displayName:
+        displayName = userID
+    conn = engine.connect()
+    cursor = conn.execute("""INSERT INTO ServerRoles (userID,
+                          serverName, permissions, displayName)
+                          VALUES (%s, %s, %s, %s);""", (userID, serverName,
+                                                        str(status_enum),
+                                                        displayName))
+    cursor.close()
 
-    cursor = conn.execute("""INSERT INTO "Per_Ch_User_Stat" (userid, channelid, status,
-                          displayname, servername)
-                          VALUES (%s, %s, %s, %s, %s);""", (client.real_name,
-                                                            channelID,
-                                                            str(status_enum),
-                                                            client.nick,
-                                                            serverName))
+def get_channelRoles(userID, channelName, serverName):
+    """
+    @returns: None if channelRoles does not exist
+    """
+    conn = engine.connect()
+    cursor = conn.execute("""SELECT (permissions) FROM ChannelRoles
+                          WHERE userID = %s AND channelName = %s
+                          AND serverName = %s;""", (userID,
+                                                    channelName,
+                                                    serverName))
+    result = cursor.fetchone()
+    if not result:
+        return None
+    status = result[0]
+    cursor.close()
+    return Status[status]
+
+def insert_channelRoles(userID, channelName, serverName, status_enum):
+    conn = engine.connect()
+    cursor = conn.execute("""INSERT INTO ChannelRoles (userID, channelName,
+                          serverName, permissions) VALUES
+                          (%s, %s, %s, %s);""", (userID, channelName,
+                                                 serverName, str(status_enum)))
     cursor.close()
 
 class FriendResultCode(enum.Enum):
     FriendDontExist = 1
     AlreadyFriends = 2
-    Successful = 3
+    InsertSuccessful = 3
 
-def insert_friend(client, theirFriendsRealName):
+def insert_friend(client, theirFriendsUserID):
     """
     @params:
         @client: of type user, the user currently using the client
-        @theirFriendsID: the user.real_name of the friend they're adding
+        @theirFriendsID: the user.nick of the friend they're adding
 
     @returns:
         False, if friendship already exists
@@ -286,29 +310,35 @@ def insert_friend(client, theirFriendsRealName):
     """
     conn = engine.connect()
 
-    cursor = conn.execute("""SELECT DISTINCT userid from "User";""")
+    cursor = conn.execute("""SELECT DISTINCT userid from Users;""")
     friend_exists = False
     for row in cursor:
-        if row[0] == theirFriendsRealName:
+        if row[0] == theirFriendsUserID:
             friend_exists = True
             break
 
     if not friend_exists:
+        cursor.close()
         return FriendResultCode.FriendDontExist
 
 
-    cursor = conn.execute("""SELECT friend1id, friend2id from "Friend";""")
+    cursor = conn.execute("""SELECT friend1ID, friend2ID from Friends;""")
     for f1id, f2id in cursor:
-        if f1id == client.real_name and f2id == theirFriendsRealName:
+        if f1id == client.nick and f2id == theirFriendsUserID:
+            cursor.close()
             return FriendResultCode.AlreadyFriends
-        if f1id == theirFriendsRealName and f2id == client.real_name:
+        if f1id == theirFriendsUserID and f2id == client.nick:
+            cursor.close()
             return FriendResultCode.AlreadyFriends
 
-    cursor = conn.execute("""INSERT INTO "Friend" (friend1id, friend2id)
-                          VALUES (%s, %s);""", (client.real_name,
-                                                theirFriendsRealName))
+    now = datetime.datetime.utcnow()
+    cursor = conn.execute("""INSERT INTO Friends (friend1id, friend2id,
+                         established)
+                          VALUES (%s, %s, %s);""", (client.nick,
+                                                    theirFriendsUserID,
+                                                    now))
     cursor.close()
-    return FriendResultCode.Successful
+    return FriendResultCode.InsertSuccessful
 
 def fetch_friends(client):
     """
@@ -321,10 +351,11 @@ def fetch_friends(client):
     # @TODO: everything lol
     conn = engine.connect()
 
-    cursor = conn.execute("""SELECT DISTINCT friend2id from "Friend"
+    cursor = conn.execute("""SELECT DISTINCT friend2id from Friends
                           WHERE friend1id=%s;""", (client.real_name))
     friends = []
     for row in cursor:
         friends.append(row[0])
 
+    cursor.close()
     return friends

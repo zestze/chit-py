@@ -12,11 +12,13 @@ import sys
 import re
 import getpass
 import traceback
+import socket
 from termcolor import colored, cprint # @NOTE: this will only work on linux
 from enum import Enum
 
 sys.path.append('../libs')
-from sockio import *
+#from sockio import *
+import sockio as sio
 # --------- CONSTANTS ---------
 # TIME_OUT
 # TIME_OUT_QUICK
@@ -83,13 +85,13 @@ def pass_user_to_server(user, socket, sock_msgs):
     @TODO: passwords
     """
     msg = "NICK {}\r\n".format(user.nick)
-    try_write(socket, msg)
-    msg = "USER {} * * :{}\r\n".format(user.user_name,
+    sio.try_write(socket, msg)
+    msg = "USER {} * * :{}\r\n".format(user.whoami,
                                        user.real_name)
-    try_write(socket, msg)
-    reply = try_read(socket, sock_msgs)
-    while reply == TIME_OUT_NOTIF:
-        reply = try_read(socket, sock_msgs)
+    sio.try_write(socket, msg)
+    reply = sio.try_read(socket, sock_msgs)
+    while reply == sio.TIME_OUT_NOTIF:
+        reply = sio.try_read(socket, sock_msgs)
 
 def connect_to_channel(user, socket, sock_msgs):
     """
@@ -102,20 +104,20 @@ def connect_to_channel(user, socket, sock_msgs):
         channel = "#" + channel
     user.set_channel(channel)
     msg = "JOIN {}\r\n".format(channel)
-    try_write(socket, msg)
+    sio.try_write(socket, msg)
 
     # wait for confirmation message from server
-    reply = try_read(socket, sock_msgs)
-    while reply == TIME_OUT_NOTIF:
-        reply = try_read(socket, sock_msgs)
+    reply = sio.try_read(socket, sock_msgs)
+    while reply == sio.TIME_OUT_NOTIF:
+        reply = sio.try_read(socket, sock_msgs)
     msg = "\n#############################\n" \
             "Successfully connected to {}".format(channel)
     print (to_cyan(msg))
 
     # should get a TOPIC
-    reply = try_read(socket, sock_msgs)
-    while reply == TIME_OUT_NOTIF:
-        reply = try_read(socket, sock_msgs)
+    reply = sio.try_read(socket, sock_msgs)
+    while reply == sio.TIME_OUT_NOTIF:
+        reply = sio.try_read(socket, sock_msgs)
 
     msg = "\n#############################\n" \
             "{} Topic:\n".format(channel)
@@ -123,9 +125,9 @@ def connect_to_channel(user, socket, sock_msgs):
     print (to_cyan(msg))
 
     # should get LIST of users
-    reply = try_read(socket, sock_msgs)
-    while reply == TIME_OUT_NOTIF:
-        reply = try_read(socket, sock_msgs)
+    reply = sio.try_read(socket, sock_msgs)
+    while reply == sio.TIME_OUT_NOTIF:
+        reply = sio.try_read(socket, sock_msgs)
 
     msg = "\n#############################\n" \
             "{} Users:\n".format(channel)
@@ -133,9 +135,9 @@ def connect_to_channel(user, socket, sock_msgs):
     print (to_cyan(msg))
 
     # should get END OF NAMES
-    reply = try_read(socket, sock_msgs)
-    while reply == TIME_OUT_NOTIF:
-        reply = try_read(socket, sock_msgs)
+    reply = sio.try_read(socket, sock_msgs)
+    while reply == sio.TIME_OUT_NOTIF:
+        reply = sio.try_read(socket, sock_msgs)
     return channel
 
 def parse_topic(msg):
@@ -201,7 +203,7 @@ def handle_user_input(user, msg, socket):
         return Code.STAY
     elif msg == "EXIT":
         part_msg = "PART {}\r\n".format(user.channel)
-        try_write(socket, part_msg)
+        sio.try_write(socket, part_msg)
         socket.close()
         return Code.QUIT
     elif msg == "HELP":
@@ -212,7 +214,7 @@ def handle_user_input(user, msg, socket):
         return Code.STAY
     else:
         priv_msg = "PRIVMSG {} :{}\r\n".format(user.channel, msg)
-        try_write(socket, priv_msg)
+        sio.try_write(socket, priv_msg)
         return Code.STAY
 
 def bio_feature(this_user):
@@ -310,12 +312,13 @@ def client(server_ip, server_port):
     try:
         sock_msgs = []
         this_user = query_for()
-        success, actual = cm.insert_user(this_user)
-
-        if not success and actual:
-            to_user = "Incorrect Password. In actuality is: {}".format(actual)
-            print (to_cyan(to_user))
-            return
+        if cm.check_user_exists(this_user.nick):
+            if not cm.verify_password(this_user.nick, this_user.password):
+                to_user = "Incorrect Password. Please try Again."
+                print (to_cyan(to_user))
+                return
+        else:
+            cm.insert_user(this_user)
 
         if not bio_feature(this_user):
             print (to_cyan("quitting..."))
@@ -326,7 +329,7 @@ def client(server_ip, server_port):
             return
 
         serv_sock = connect_to_server(server_ip, int(server_port))
-        cm.insert_login(serv_sock, this_user)
+        cm.insert_login(serv_sock, this_user.nick)
         pass_user_to_server(this_user, serv_sock, sock_msgs)
         connect_to_channel(this_user, serv_sock, sock_msgs)
 
@@ -342,7 +345,7 @@ def client(server_ip, server_port):
 
         code = Code.STAY
         while code != Code.QUIT:
-            update_sock_msgs(serv_sock, sock_msgs)
+            sio.update_sock_msgs(serv_sock, sock_msgs)
             for msg in sock_msgs:
                 parse_msg(msg)
             del sock_msgs[:]

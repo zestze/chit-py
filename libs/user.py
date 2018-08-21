@@ -7,16 +7,16 @@ import socket
 class user:
     """
     """
-    def __init__(self, nick, user_name, real_name, password='', channel=''):
+    def __init__(self, nick, whoami, real_name, password='', channel=''):
         self.nick      = nick
-        self.user_name = user_name
+        self.whoami    = whoami
         self.real_name = real_name
         self.password  = password
         self.channel   = channel
 
     def __str__(self):
         to_user = "nick: " + self.nick + "\n" + \
-                "user: " + self.user_name + "\n" + \
+                "user: " + self.whoami + "\n" + \
                 "real_name: " + self.real_name + "\n" + \
                 "password: " + self.password + "\n" + \
                 "channel: " + self.channel

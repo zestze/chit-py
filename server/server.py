@@ -74,7 +74,7 @@ def register_session(sock, sock_msgs):
                                              client.nick)
     msg += "Internet Relay Network "
     msg += "{}!{}@{}\r\n".format(client.nick,
-                                 client.user_name,
+                                 client.whoami,
                                  theirIP)
     sio.try_write(sock, msg)
     return client
@@ -96,7 +96,11 @@ def server(listenPort, serverName="__NO_NAME_GIVEN__"):
         if serverName == "__NO_NAME_GIVEN__":
             serverName = generate_serverID()
         # log server to psql database
-        cm.insert_server(listenSocket, serverName)
+        if cm.check_server_exists(serverName):
+            cm.insert_server_metadata(listenSocket, serverName)
+        else:
+            cm.insert_server(serverName)
+            cm.insert_server_metadata(listenSocket, serverName)
 
         channels__newuserevents = {} # for notifying of new users
         while True:
