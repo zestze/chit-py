@@ -189,8 +189,8 @@ class Servlet(threading.Thread):
                                        cm.Status.Admin)
             else:
                 #@TODO: do something with the status
-                status = get_channelRoles(newu.nick, self.channel_name, self.serverName)
+                status = cm.get_channelRoles(newu.nick, self.channel_name, self.serverName)
                 if not status:
-                    cm.insert_channelRoles(newu.userID, self.channel_name, self.serverName,
+                    cm.insert_channelRoles(newu.nick, self.channel_name, self.serverName,
                                            cm.Status.User)
 

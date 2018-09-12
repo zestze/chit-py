@@ -352,7 +352,7 @@ def fetch_friends(client):
     conn = engine.connect()
 
     cursor = conn.execute("""SELECT DISTINCT friend2id from Friends
-                          WHERE friend1id=%s;""", (client.real_name))
+                          WHERE friend1id=%s;""", (client.nick))
     friends = []
     for row in cursor:
         friends.append(row[0])

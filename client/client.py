@@ -242,7 +242,7 @@ def bio_feature(this_user):
     print (to_cyan(msg))
     reply = input("")
 
-    cm.update_bio(this_user, reply)
+    cm.update_bio(this_user.nick, reply)
     return False
 
 def friends_feature(this_user):
